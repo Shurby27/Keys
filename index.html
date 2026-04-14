@@ -179,6 +179,7 @@
       <button id="startBtn">Start</button>
       <button id="nextBtn">Skip</button>
       <button id="hintBtn">Hint</button>
+      <button id="displayModeBtn">Scale Degrees</button>
     </div>
 
     <div class="rotate">Rotate your iPhone to landscape.</div>
@@ -217,6 +218,7 @@
     const startBtn = document.getElementById("startBtn");
     const nextBtn = document.getElementById("nextBtn");
     const hintBtn = document.getElementById("hintBtn");
+    const displayModeBtn = document.getElementById("displayModeBtn");
 
     let audioContext = null;
     let analyser = null;
@@ -229,6 +231,7 @@
     let target = null;
     let lastDetectedText = "—";
     let lastAdvanceAt = 0;
+    let displayMode = "notes";
 
     function renderEnvironment() {
       const secure = window.isSecureContext ? "secure" : "not secure";
@@ -264,6 +267,49 @@
       return `${idx}th inversion`;
     }
 
+    function tonicPitchClassFromKey(key) {
+      const tonicText = key.split(" ")[0].replace(/#/g, "♯").replace(/b/g, "♭");
+      return NOTE_NAMES_SHARP.indexOf(tonicText);
+    }
+
+    function romanNumeralForSemitone(semitones) {
+      const numerals = {
+        0: "I",
+        1: "♭II",
+        2: "II",
+        3: "♭III",
+        4: "III",
+        5: "IV",
+        6: "♭V",
+        7: "V",
+        8: "♭VI",
+        9: "VI",
+        10: "♭VII",
+        11: "VII"
+      };
+      return numerals[((semitones % 12) + 12) % 12];
+    }
+
+    function degreeSymbolForPitchClass(pc, key) {
+      const tonicPc = tonicPitchClassFromKey(key);
+      const distance = ((pc - tonicPc) % 12 + 12) % 12;
+      return romanNumeralForSemitone(distance);
+    }
+
+    function displaySymbolForTarget(currentTarget) {
+      if (!currentTarget) return "—";
+      if (displayMode === "notes") return currentTarget.symbol;
+
+      const rootDegree = degreeSymbolForPitchClass(currentTarget.root, currentTarget.key);
+      const bassDegree = degreeSymbolForPitchClass(currentTarget.bassPc, currentTarget.key);
+      const symbolBase = `${rootDegree}${currentTarget.chordType.suffix}`;
+      return currentTarget.inversion === 0 ? symbolBase : `${symbolBase}/${bassDegree}`;
+    }
+
+    function updateDisplayModeButton() {
+      displayModeBtn.textContent = displayMode === "notes" ? "Scale Degrees" : "Note Names";
+    }
+
     function buildTarget() {
       const root = randInt(12);
       const chordType = choose(CHORD_TYPES);
@@ -289,9 +335,10 @@
 
     function renderTarget() {
       keyEl.textContent = `Key: ${target.key}`;
-      chordEl.textContent = target.symbol;
+      chordEl.textContent = displaySymbolForTarget(target);
       notesEl.textContent = "";
       detectedEl.textContent = `Detected: ${lastDetectedText}`;
+      updateDisplayModeButton();
     }
 
     function nextTarget() {
@@ -480,7 +527,13 @@
       notesEl.textContent = target.hint;
     });
 
+    displayModeBtn.addEventListener("click", () => {
+      displayMode = displayMode === "notes" ? "degrees" : "notes";
+      renderTarget();
+    });
+
     renderEnvironment();
+    updateDisplayModeButton();
 
     document.addEventListener("visibilitychange", async () => {
       if (document.visibilityState === "visible" && audioContext && audioContext.state === "suspended") {
