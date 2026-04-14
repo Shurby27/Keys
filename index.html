@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <title>Piano Chord Trainer</title>
@@ -22,9 +22,8 @@
     html, body {
       margin: 0;
       width: 100%;
-      min-height: 100%;
-      overflow-x: hidden;
-      overflow-y: auto;
+      height: 100%;
+      overflow: hidden;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       background: var(--bg);
       color: var(--text);
@@ -36,24 +35,22 @@
       align-items: center;
       justify-content: center;
       touch-action: manipulation;
-      -webkit-overflow-scrolling: touch;
     }
 
     #app {
       position: relative;
       width: 100vw;
-      min-height: 100vh;
+      height: 100vh;
       display: flex;
       align-items: center;
       justify-content: center;
       background: var(--bg);
-      padding-bottom: 6.25rem;
     }
 
     .center {
       text-align: center;
-      padding: 2rem 1.25rem 7.5rem;
-      width: min(96vw, 1200px);
+      padding: 2rem;
+      width: min(92vw, 1200px);
     }
 
     .key-label {
@@ -80,7 +77,7 @@
     }
 
     .status {
-      position: fixed;
+      position: absolute;
       top: max(1rem, env(safe-area-inset-top));
       left: 50%;
       transform: translateX(-50%);
@@ -95,7 +92,7 @@
     }
 
     .detected {
-      position: fixed;
+      position: absolute;
       bottom: calc(max(1rem, env(safe-area-inset-bottom)) + 4.2rem);
       left: 50%;
       transform: translateX(-50%);
@@ -109,20 +106,16 @@
     }
 
     .controls {
-      position: fixed;
-      bottom: max(0.75rem, env(safe-area-inset-bottom));
+      position: absolute;
+      bottom: max(1rem, env(safe-area-inset-bottom));
       left: 50%;
       transform: translateX(-50%);
       display: flex;
-      gap: 0.5rem;
+      gap: 0.6rem;
       flex-wrap: nowrap;
       justify-content: center;
       align-items: center;
-      width: min(96vw, 920px);
-      overflow-x: auto;
-      overflow-y: hidden;
-      padding: 0 0.35rem;
-      -webkit-overflow-scrolling: touch;
+      width: min(96vw, 980px);
     }
 
     button {
@@ -130,14 +123,15 @@
       border: none;
       border-radius: 999px;
       padding: 0.8rem 1rem;
-      font-size: 0.95rem;
+      font-size: clamp(0.9rem, 1.8vw, 1rem);
       font-weight: 700;
       color: var(--text);
       background: var(--panel-strong);
       backdrop-filter: blur(10px);
       box-shadow: 0 3px 10px rgba(0,0,0,0.08);
       white-space: nowrap;
-      flex: 0 0 auto;
+      flex: 1 1 0;
+      min-width: 0;
     }
 
     button:active { transform: translateY(1px); }
@@ -154,7 +148,7 @@
 
     .rotate {
       display: none;
-      position: fixed;
+      position: absolute;
       inset: 0;
       align-items: center;
       justify-content: center;
@@ -165,24 +159,6 @@
       color: var(--text);
       background: var(--bg);
       z-index: 50;
-    }
-
-
-    @media (max-width: 760px) and (orientation: landscape) {
-      .controls {
-        gap: 0.4rem;
-        width: min(98vw, 920px);
-      }
-
-      button {
-        padding: 0.72rem 0.82rem;
-        font-size: 0.88rem;
-      }
-
-      .detected {
-        font-size: 0.88rem;
-        min-width: min(90vw, 420px);
-      }
     }
 
     @media (orientation: portrait) {
