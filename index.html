@@ -348,6 +348,7 @@
         started = true;
         startBtn.textContent = "Mic On";
         startBtn.disabled = true;
+        envEl.classList.add("hidden");
         nextTarget();
         listenLoop();
       } catch (err) {
