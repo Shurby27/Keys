@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <title>Piano Chord Trainer</title>
+  <style>
+    :root {
+      --bg: #bfe8ff;
+      --text: #0d2740;
+      --subtle: rgba(13, 39, 64, 0.72);
+      --panel: rgba(255, 255, 255, 0.28);
+      --panel-strong: rgba(255, 255, 255, 0.46);
+      --ok: #0f7b3f;
+      --warn: #8a4b00;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      touch-action: manipulation;
+    }
+
+    #app {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg);
+    }
+
+    .center {
+      text-align: center;
+      padding: 2rem;
+      width: min(92vw, 1200px);
+    }
+
+    .key-label {
+      font-size: clamp(1.2rem, 2.2vw, 2rem);
+      letter-spacing: 0.06em;
+      font-weight: 700;
+      text-transform: uppercase;
+      color: var(--subtle);
+      margin-bottom: 1rem;
+    }
+
+    .chord {
+      font-size: clamp(3rem, 9vw, 7rem);
+      font-weight: 800;
+      line-height: 1;
+      margin: 0.1em 0;
+    }
+
+    .notes {
+      font-size: clamp(1rem, 2vw, 1.4rem);
+      color: var(--subtle);
+      margin-top: 1rem;
+      min-height: 1.4em;
+    }
+
+    .status {
+      position: absolute;
+      top: max(1rem, env(safe-area-inset-top));
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--panel);
+      padding: 0.7rem 1rem;
+      border-radius: 999px;
+      font-size: 0.95rem;
+      font-weight: 700;
+      backdrop-filter: blur(10px);
+      max-width: calc(100vw - 2rem);
+      text-align: center;
+    }
+
+    .detected {
+      position: absolute;
+      bottom: calc(max(1rem, env(safe-area-inset-bottom)) + 4.2rem);
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(255,255,255,0.22);
+      padding: 0.75rem 1rem;
+      border-radius: 16px;
+      font-size: 0.95rem;
+      color: var(--subtle);
+      text-align: center;
+      min-width: min(80vw, 420px);
+    }
+
+    .controls {
+      position: absolute;
+      bottom: max(1rem, env(safe-area-inset-bottom));
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    button {
+      appearance: none;
+      border: none;
+      border-radius: 999px;
+      padding: 0.9rem 1.2rem;
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--text);
+      background: var(--panel-strong);
+      backdrop-filter: blur(10px);
+      box-shadow: 0 3px 10px rgba(0,0,0,0.08);
+    }
+
+    button:active { transform: translateY(1px); }
+
+    .hidden { display: none !important; }
+
+    .success {
+      color: var(--ok);
+    }
+
+    .warning {
+      color: var(--warn);
+    }
+
+    .rotate {
+      display: none;
+      position: absolute;
+      inset: 0;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 2rem;
+      font-size: 1.5rem;
+      font-weight: 800;
+      color: var(--text);
+      background: var(--bg);
+      z-index: 50;
+    }
+
+    @media (orientation: portrait) {
+      .rotate { display: flex; }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div class="status" id="status">Open in Safari, rotate to landscape, then tap Start.</div>
+
+    <div class="center">
+      <div class="key-label" id="keyLabel">Key: —</div>
+      <div class="chord" id="chordDisplay">—</div>
+      <div class="notes" id="notesDisplay"></div>
+    </div>
+
+    <div class="detected" id="detectedBox">Detected: —</div>
+
+    <div class="detected" id="envBox" style="bottom: calc(max(1rem, env(safe-area-inset-bottom)) + 8.3rem);">Environment: checking…</div>
+
+    <div class="controls">
+      <button id="startBtn">Start</button>
+      <button id="nextBtn">Skip</button>
+      <button id="hintBtn">Hint</button>
+    </div>
+
+    <div class="rotate">Rotate your iPhone to landscape.</div>
+  </div>
+
+  <script>
+    const NOTE_NAMES_SHARP = ["C", "C♯", "D", "E♭", "E", "F", "F♯", "G", "A♭", "A", "B♭", "B"];
+    const NATURAL_NOTE_NAMES = ["C", "D♭", "D", "E♭", "E", "F", "G♭", "G", "A♭", "A", "B♭", "B"];
+    const MAJOR_KEYS = ["C major", "G major", "D major", "A major", "E major", "B major", "F♯ major", "D♭ major", "A♭ major", "E♭ major", "B♭ major", "F major"];
+    const MINOR_KEYS = ["A minor", "E minor", "B minor", "F♯ minor", "C♯ minor", "G♯ minor", "D♯ minor", "B♭ minor", "F minor", "C minor", "G minor", "D minor"];
+
+    const CHORD_TYPES = [
+      { name: "major", suffix: "", intervals: [0, 4, 7], category: "simple" },
+      { name: "minor", suffix: "m", intervals: [0, 3, 7], category: "simple" },
+      { name: "diminished", suffix: "dim", intervals: [0, 3, 6], category: "advanced" },
+      { name: "augmented", suffix: "+", intervals: [0, 4, 8], category: "advanced" },
+      { name: "sus2", suffix: "sus2", intervals: [0, 2, 7], category: "simple" },
+      { name: "sus4", suffix: "sus4", intervals: [0, 5, 7], category: "simple" },
+      { name: "add9", suffix: "add9", intervals: [0, 2, 4, 7], category: "advanced" },
+      { name: "6", suffix: "6", intervals: [0, 4, 7, 9], category: "advanced" },
+      { name: "m6", suffix: "m6", intervals: [0, 3, 7, 9], category: "advanced" },
+      { name: "dominant 7", suffix: "7", intervals: [0, 4, 7, 10], category: "simple" },
+      { name: "major 7", suffix: "maj7", intervals: [0, 4, 7, 11], category: "advanced" },
+      { name: "minor 7", suffix: "m7", intervals: [0, 3, 7, 10], category: "simple" },
+      { name: "minor major 7", suffix: "m(maj7)", intervals: [0, 3, 7, 11], category: "advanced" },
+      { name: "half diminished 7", suffix: "m7♭5", intervals: [0, 3, 6, 10], category: "advanced" },
+      { name: "diminished 7", suffix: "dim7", intervals: [0, 3, 6, 9], category: "advanced" }
+    ];
+
+    const statusEl = document.getElementById("status");
+    const keyEl = document.getElementById("keyLabel");
+    const chordEl = document.getElementById("chordDisplay");
+    const notesEl = document.getElementById("notesDisplay");
+    const detectedEl = document.getElementById("detectedBox");
+    const envEl = document.getElementById("envBox");
+    const startBtn = document.getElementById("startBtn");
+    const nextBtn = document.getElementById("nextBtn");
+    const hintBtn = document.getElementById("hintBtn");
+
+    let audioContext = null;
+    let analyser = null;
+    let micSource = null;
+    let freqData = null;
+    let timeData = null;
+    let rafId = null;
+    let started = false;
+    let stableHits = 0;
+    let target = null;
+    let lastDetectedText = "—";
+    let lastAdvanceAt = 0;
+
+    function renderEnvironment() {
+      const secure = window.isSecureContext ? "secure" : "not secure";
+      const hasMedia = navigator.mediaDevices && navigator.mediaDevices.getUserMedia ? "mic API available" : "no mic API";
+      envEl.textContent = `Environment: ${secure} • ${hasMedia}`;
+    }
+
+    function randInt(max) {
+      return Math.floor(Math.random() * max);
+    }
+
+    function choose(arr) {
+      return arr[randInt(arr.length)];
+    }
+
+    function noteName(pc) {
+      return NOTE_NAMES_SHARP[((pc % 12) + 12) % 12];
+    }
+
+    function bassName(pc) {
+      return NATURAL_NOTE_NAMES[((pc % 12) + 12) % 12];
+    }
+
+    function formatPitchClasses(pcs) {
+      return pcs.map(pc => noteName(pc)).join("  •  ");
+    }
+
+    function inversionLabel(idx) {
+      if (idx === 0) return "root position";
+      if (idx === 1) return "1st inversion";
+      if (idx === 2) return "2nd inversion";
+      if (idx === 3) return "3rd inversion";
+      return `${idx}th inversion`;
+    }
+
+    function buildTarget() {
+      const root = randInt(12);
+      const chordType = choose(CHORD_TYPES);
+      const inversion = randInt(chordType.intervals.length);
+      const pcs = chordType.intervals.map(i => (root + i) % 12);
+      const bassPc = pcs[inversion];
+      const key = Math.random() < 0.5 ? choose(MAJOR_KEYS) : choose(MINOR_KEYS);
+      const rootName = noteName(root);
+      const symbolBase = `${rootName}${chordType.suffix}`;
+      const symbol = inversion === 0 ? symbolBase : `${symbolBase}/${bassName(bassPc)}`;
+
+      return {
+        key,
+        root,
+        chordType,
+        inversion,
+        symbol,
+        pcs: [...new Set(pcs)],
+        bassPc,
+        hint: `${symbol} = ${formatPitchClasses(pcs)} (${inversionLabel(inversion)})`
+      };
+    }
+
+    function renderTarget() {
+      keyEl.textContent = `Key: ${target.key}`;
+      chordEl.textContent = target.symbol;
+      notesEl.textContent = "";
+      detectedEl.textContent = `Detected: ${lastDetectedText}`;
+    }
+
+    function nextTarget() {
+      target = buildTarget();
+      stableHits = 0;
+      lastDetectedText = "—";
+      renderTarget();
+      setStatus("Listening for the correct chord.");
+    }
+
+    function setStatus(msg, cls = "") {
+      statusEl.textContent = msg;
+      statusEl.className = `status ${cls}`.trim();
+    }
+
+    async function startAudio() {
+      if (started) return;
+      try {
+        if (!window.isSecureContext) {
+          setStatus("Mic needs a secure page. Open this through Safari on https:// or localhost, not directly from Files.", "warning");
+          return;
+        }
+
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          setStatus("This browser session does not expose microphone access.", "warning");
+          return;
+        }
+
+        setStatus("Requesting microphone access…");
+
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: false,
+            noiseSuppression: false,
+            autoGainControl: false
+          }
+        });
+
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioContext.state === "suspended") {
+          await audioContext.resume();
+        }
+
+        analyser = audioContext.createAnalyser();
+        analyser.fftSize = 8192;
+        analyser.smoothingTimeConstant = 0.15;
+
+        micSource = audioContext.createMediaStreamSource(stream);
+        micSource.connect(analyser);
+
+        freqData = new Float32Array(analyser.frequencyBinCount);
+        timeData = new Float32Array(analyser.fftSize);
+
+        started = true;
+        startBtn.textContent = "Mic On";
+        startBtn.disabled = true;
+        nextTarget();
+        listenLoop();
+      } catch (err) {
+        console.error(err);
+        const msg = err && err.name ? err.name : "Unknown error";
+        setStatus(`Microphone start failed: ${msg}. Use Safari and allow mic access.`, "warning");
+      }
+    }
+
+    function midiToFreq(midi) {
+      return 440 * Math.pow(2, (midi - 69) / 12);
+    }
+
+    function freqToMidi(freq) {
+      return Math.round(69 + 12 * Math.log2(freq / 440));
+    }
+
+    function getRms() {
+      analyser.getFloatTimeDomainData(timeData);
+      let sum = 0;
+      for (let i = 0; i < timeData.length; i++) {
+        sum += timeData[i] * timeData[i];
+      }
+      return Math.sqrt(sum / timeData.length);
+    }
+
+    function analyzeChord() {
+      if (!analyser) return null;
+      const rms = getRms();
+      if (rms < 0.008) return null;
+
+      analyser.getFloatFrequencyData(freqData);
+      const nyquist = audioContext.sampleRate / 2;
+      const binHz = nyquist / freqData.length;
+      const pitchScores = new Array(12).fill(0);
+      const noteScores = new Map();
+      const peaks = [];
+
+      for (let midi = 36; midi <= 96; midi++) {
+        const f = midiToFreq(midi);
+        const bin = Math.round(f / binHz);
+        if (bin < 2 || bin >= freqData.length - 2) continue;
+        const value = Math.max(freqData[bin - 1], freqData[bin], freqData[bin + 1]);
+        if (value < -78) continue;
+        const linear = Math.pow(10, value / 20);
+        const pc = ((midi % 12) + 12) % 12;
+        pitchScores[pc] += linear;
+        noteScores.set(midi, (noteScores.get(midi) || 0) + linear);
+        peaks.push({ midi, pc, linear });
+      }
+
+      const maxPc = Math.max(...pitchScores);
+      if (maxPc <= 0.0001) return null;
+
+      const activePcs = [];
+      for (let pc = 0; pc < 12; pc++) {
+        if (pitchScores[pc] >= maxPc * 0.28) activePcs.push(pc);
+      }
+      if (activePcs.length < 2) return null;
+
+      const sortedNotes = [...noteScores.entries()]
+        .filter(([, score]) => score >= Math.max(...noteScores.values()) * 0.08)
+        .sort((a, b) => a[0] - b[0]);
+
+      if (!sortedNotes.length) return null;
+
+      const bassMidi = sortedNotes[0][0];
+      const bassPc = ((bassMidi % 12) + 12) % 12;
+
+      return {
+        activePcs,
+        bassPc,
+        bassMidi,
+        text: `${activePcs.map(noteName).join(" ")} | bass ${bassName(bassPc)}`
+      };
+    }
+
+    function arraysEqualAsSets(a, b) {
+      if (a.length !== b.length) return false;
+      const aa = [...new Set(a)].sort((x, y) => x - y);
+      const bb = [...new Set(b)].sort((x, y) => x - y);
+      if (aa.length !== bb.length) return false;
+      return aa.every((value, index) => value === bb[index]);
+    }
+
+    function isTargetMatch(detected) {
+      if (!detected || !target) return false;
+      const exact = arraysEqualAsSets(detected.activePcs, target.pcs);
+      const extraOne = detected.activePcs.filter(pc => !target.pcs.includes(pc)).length <= 1;
+      const missingNone = target.pcs.every(pc => detected.activePcs.includes(pc));
+      const pcsMatch = exact || (missingNone && extraOne && detected.activePcs.length <= target.pcs.length + 1);
+      const bassMatch = detected.bassPc === target.bassPc;
+      return pcsMatch && bassMatch;
+    }
+
+    function listenLoop() {
+      const detected = analyzeChord();
+      if (detected) {
+        lastDetectedText = detected.text;
+        detectedEl.textContent = `Detected: ${detected.text}`;
+        if (isTargetMatch(detected)) {
+          stableHits += 1;
+          setStatus(`Correct: ${target.symbol}`, "success");
+          if (stableHits >= 6 && Date.now() - lastAdvanceAt > 1200) {
+            lastAdvanceAt = Date.now();
+            setStatus(`Nice. Moving to the next chord.`, "success");
+            setTimeout(() => nextTarget(), 450);
+          }
+        } else {
+          stableHits = 0;
+        }
+      } else {
+        detectedEl.textContent = "Detected: listening…";
+        stableHits = 0;
+      }
+
+      rafId = requestAnimationFrame(listenLoop);
+    }
+
+    startBtn.addEventListener("click", startAudio);
+    startBtn.addEventListener("touchend", (e) => { e.preventDefault(); startAudio(); }, { passive: false });
+    nextBtn.addEventListener("click", () => {
+      if (!started) return;
+      nextTarget();
+    });
+
+    hintBtn.addEventListener("click", () => {
+      if (!target) return;
+      notesEl.textContent = target.hint;
+    });
+
+    renderEnvironment();
+
+    document.addEventListener("visibilitychange", async () => {
+      if (document.visibilityState === "visible" && audioContext && audioContext.state === "suspended") {
+        await audioContext.resume();
+      }
+    });
+  </script>
+</body>
+</html>
