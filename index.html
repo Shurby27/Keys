@@ -367,6 +367,7 @@
     let lastAdvanceAt = 0;
     let displayMode = "notes";
     let advancePending = false;
+    let advanceTimeoutId = null;
 
     const CHORD_PRESETS = [
       { id: "triads", label: "Triads", matches: chordType => ["", "m", "dim", "+", "sus2", "sus4"].includes(chordType.suffix) },
@@ -664,7 +665,15 @@
       updateDisplayModeButton();
     }
 
+    function clearAdvanceTimeout() {
+      if (advanceTimeoutId) {
+        clearTimeout(advanceTimeoutId);
+        advanceTimeoutId = null;
+      }
+    }
+
     function nextTarget() {
+      clearAdvanceTimeout();
       target = buildTarget();
       stableHits = 0;
       advancePending = false;
@@ -822,20 +831,18 @@
         detectedEl.textContent = `Detected: ${detected.text}`;
         if (isTargetMatch(detected)) {
           stableHits += 1;
-          if (!advancePending) {
-            setStatus(`Correct: ${target.symbol}`, "success");
-          }
-          if (stableHits >= 4 && !advancePending) {
+          if (stableHits >= 2 && !advancePending) {
             advancePending = true;
             lastAdvanceAt = Date.now();
             setStatus(`Nice. Moving to the next chord.`, "success");
-            setTimeout(() => {
+            advanceTimeoutId = setTimeout(() => {
               nextTarget();
-            }, 300);
+            }, 220);
+          } else if (!advancePending) {
+            setStatus(`Correct: ${target.symbol}`, "success");
           }
         } else {
           stableHits = 0;
-          advancePending = false;
         }
       } else {
         detectedEl.textContent = "Detected: listening…";
