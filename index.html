@@ -366,6 +366,7 @@
     let lastDetectedText = "—";
     let lastAdvanceAt = 0;
     let displayMode = "notes";
+    let advancePending = false;
 
     const CHORD_PRESETS = [
       { id: "triads", label: "Triads", matches: chordType => ["", "m", "dim", "+", "sus2", "sus4"].includes(chordType.suffix) },
@@ -400,7 +401,95 @@
       return NATURAL_NOTE_NAMES[((pc % 12) + 12) % 12];
     }
 
-    function formatPitchClasses(pcs) {
+    const LETTERS = ["C", "D", "E", "F", "G", "A", "B"];
+    const NATURAL_PCS_BY_LETTER = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+
+    function accidentalText(amount) {
+      if (amount > 0) return "♯".repeat(amount);
+      if (amount < 0) return "♭".repeat(-amount);
+      return "";
+    }
+
+    function normalizeAccidentalDiff(diff) {
+      let value = diff;
+      while (value > 6) value -= 12;
+      while (value < -6) value += 12;
+      if (value > 2) value -= 12;
+      if (value < -2) value += 12;
+      return value;
+    }
+
+    function parseSpelledNote(name) {
+      const normalized = name.replace(/#/g, "♯").replace(/b/g, "♭");
+      const letter = normalized[0];
+      const accidentalPart = normalized.slice(1);
+      const accidental = [...accidentalPart].reduce((sum, char) => {
+        if (char === "♯") return sum + 1;
+        if (char === "♭") return sum - 1;
+        return sum;
+      }, 0);
+      const pc = (NATURAL_PCS_BY_LETTER[letter] + accidental + 120) % 12;
+      return { letter, accidental, pc, text: `${letter}${accidentalText(accidental)}` };
+    }
+
+    function advanceLetter(letter, steps) {
+      const idx = LETTERS.indexOf(letter);
+      return LETTERS[(idx + steps) % LETTERS.length];
+    }
+
+    function keyScaleSpellings(key) {
+      const [tonicRaw, mode] = key.split(" ");
+      const tonic = parseSpelledNote(tonicRaw);
+      const intervals = mode === "minor" ? [0, 2, 3, 5, 7, 8, 10] : [0, 2, 4, 5, 7, 9, 11];
+      return intervals.map((interval, degreeIndex) => {
+        const letter = advanceLetter(tonic.letter, degreeIndex);
+        const targetPc = (tonic.pc + interval) % 12;
+        const accidental = normalizeAccidentalDiff(targetPc - NATURAL_PCS_BY_LETTER[letter]);
+        const text = `${letter}${accidentalText(accidental)}`;
+        return { letter, accidental, pc: targetPc, text };
+      });
+    }
+
+    function spellPitchClassInKey(pc, key) {
+      const candidates = keyScaleSpellings(key).map((degree) => {
+        const extra = normalizeAccidentalDiff(pc - degree.pc);
+        const totalAccidental = degree.accidental + extra;
+        return {
+          text: `${degree.letter}${accidentalText(totalAccidental)}`,
+          extraAbs: Math.abs(extra),
+          totalAbs: Math.abs(totalAccidental)
+        };
+      });
+      candidates.sort((a, b) => a.extraAbs - b.extraAbs || a.totalAbs - b.totalAbs);
+      return candidates[0].text;
+    }
+
+    function chordLetterSteps(interval, chordType) {
+      if (interval === 0) return 0;
+      if (interval === 1 || interval === 2) return chordType.suffix.includes("9") ? 8 : 1;
+      if (interval === 3 || interval === 4) return 2;
+      if (interval === 5) return 3;
+      if (interval === 6 || interval === 7 || interval === 8) return 4;
+      if (interval === 9) return 5;
+      if (interval === 10 || interval === 11) return 6;
+      return 0;
+    }
+
+    function spellChordTone(rootSpelling, rootPc, interval, chordType) {
+      const targetPc = (rootPc + interval) % 12;
+      const targetLetter = advanceLetter(rootSpelling.letter, chordLetterSteps(interval, chordType));
+      const accidental = normalizeAccidentalDiff(targetPc - NATURAL_PCS_BY_LETTER[targetLetter]);
+      return `${targetLetter}${accidentalText(accidental)}`;
+    }
+
+    function spelledChordTones(currentTarget) {
+      if (!currentTarget) return [];
+      const rootSpelling = parseSpelledNote(spellPitchClassInKey(currentTarget.root, currentTarget.key));
+      return currentTarget.chordType.intervals.map(interval => spellChordTone(rootSpelling, currentTarget.root, interval, currentTarget.chordType));
+    }
+
+    function formatPitchClasses(pcs, currentTarget = null) {
+      if (currentTarget) return spelledChordTones(currentTarget).join("  •  ");
       return pcs.map(pc => noteName(pc)).join("  •  ");
     }
 
@@ -554,17 +643,17 @@
       const rootName = noteName(root);
       const symbolBase = `${rootName}${chordType.suffix}`;
       const symbol = inversion === 0 ? symbolBase : `${symbolBase}/${bassName(bassPc)}`;
-
-      return {
+      const targetObj = {
         key,
         root,
         chordType,
         inversion,
         symbol,
         pcs: [...new Set(pcs)],
-        bassPc,
-        hint: `${symbol} = ${formatPitchClasses(pcs)} (${inversionLabel(inversion)})`
+        bassPc
       };
+      targetObj.hint = `${symbol} = ${formatPitchClasses(pcs, targetObj)} (${inversionLabel(inversion)})`;
+      return targetObj;
     }
 
     function renderTarget() {
@@ -578,6 +667,7 @@
     function nextTarget() {
       target = buildTarget();
       stableHits = 0;
+      advancePending = false;
       lastDetectedText = "—";
       renderTarget();
       setStatus("Listening for the correct chord.");
@@ -732,14 +822,20 @@
         detectedEl.textContent = `Detected: ${detected.text}`;
         if (isTargetMatch(detected)) {
           stableHits += 1;
-          setStatus(`Correct: ${target.symbol}`, "success");
-          if (stableHits >= 6 && Date.now() - lastAdvanceAt > 1200) {
+          if (!advancePending) {
+            setStatus(`Correct: ${target.symbol}`, "success");
+          }
+          if (stableHits >= 4 && !advancePending) {
+            advancePending = true;
             lastAdvanceAt = Date.now();
             setStatus(`Nice. Moving to the next chord.`, "success");
-            setTimeout(() => nextTarget(), 450);
+            setTimeout(() => {
+              nextTarget();
+            }, 300);
           }
         } else {
           stableHits = 0;
+          advancePending = false;
         }
       } else {
         detectedEl.textContent = "Detected: listening…";
