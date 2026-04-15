@@ -531,14 +531,67 @@
       return romanNumeralForSemitone(distance);
     }
 
+    function romanCaseForChordType(chordType) {
+      const minorLike = new Set([
+        "minor",
+        "m6",
+        "minor 7",
+        "minor major 7",
+        "half diminished 7",
+        "diminished",
+        "diminished 7"
+      ]);
+      return minorLike.has(chordType.name) ? "lower" : "upper";
+    }
+
+    function romanSuffixForChordType(chordType) {
+      switch (chordType.name) {
+        case "major":
+        case "minor":
+          return "";
+        case "diminished":
+          return "dim";
+        case "augmented":
+          return "+";
+        case "sus2":
+          return "sus2";
+        case "sus4":
+          return "sus4";
+        case "add9":
+          return "add9";
+        case "6":
+        case "m6":
+          return "6";
+        case "dominant 7":
+        case "minor 7":
+        case "half diminished 7":
+          return "7";
+        case "major 7":
+          return "maj7";
+        case "minor major 7":
+          return "(maj7)";
+        case "diminished 7":
+          return "dim7";
+        default:
+          return chordType.suffix || "";
+      }
+    }
+
+    function romanChordSymbolForTarget(currentTarget) {
+      const rootDegreeRaw = degreeSymbolForPitchClass(currentTarget.root, currentTarget.key);
+      const rootDegree = romanCaseForChordType(currentTarget.chordType) === "lower"
+        ? rootDegreeRaw.toLowerCase()
+        : rootDegreeRaw;
+      const suffix = romanSuffixForChordType(currentTarget.chordType);
+      const bassDegree = degreeSymbolForPitchClass(currentTarget.bassPc, currentTarget.key);
+      const symbolBase = `${rootDegree}${suffix}`;
+      return currentTarget.inversion === 0 ? symbolBase : `${symbolBase}/${bassDegree}`;
+    }
+
     function displaySymbolForTarget(currentTarget) {
       if (!currentTarget) return "—";
       if (displayMode === "notes") return currentTarget.symbol;
-
-      const rootDegree = degreeSymbolForPitchClass(currentTarget.root, currentTarget.key);
-      const bassDegree = degreeSymbolForPitchClass(currentTarget.bassPc, currentTarget.key);
-      const symbolBase = `${rootDegree}${currentTarget.chordType.suffix}`;
-      return currentTarget.inversion === 0 ? symbolBase : `${symbolBase}/${bassDegree}`;
+      return romanChordSymbolForTarget(currentTarget);
     }
 
     function updateDisplayModeButton() {
@@ -824,6 +877,17 @@
       return pcsMatch && bassMatch;
     }
 
+    function confirmAndAdvance() {
+      if (!target || advancePending) return;
+      advancePending = true;
+      lastAdvanceAt = Date.now();
+      setStatus(`Correct: ${target.symbol}`, "success");
+      clearAdvanceTimeout();
+      advanceTimeoutId = setTimeout(() => {
+        nextTarget();
+      }, 220);
+    }
+
     function listenLoop() {
       const detected = analyzeChord();
       if (detected) {
@@ -831,15 +895,10 @@
         detectedEl.textContent = `Detected: ${detected.text}`;
         if (isTargetMatch(detected)) {
           stableHits += 1;
-          if (stableHits >= 2 && !advancePending) {
-            advancePending = true;
-            lastAdvanceAt = Date.now();
-            setStatus(`Nice. Moving to the next chord.`, "success");
-            advanceTimeoutId = setTimeout(() => {
-              nextTarget();
-            }, 220);
+          if (stableHits >= 2) {
+            confirmAndAdvance();
           } else if (!advancePending) {
-            setStatus(`Correct: ${target.symbol}`, "success");
+            setStatus(`Match detected. Hold briefly…`);
           }
         } else {
           stableHits = 0;
