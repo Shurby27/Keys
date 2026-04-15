@@ -51,8 +51,9 @@
 
     .center {
       text-align: center;
-      padding: 2rem;
+      padding: 1.6rem 2rem 2rem;
       width: min(92vw, 1200px);
+      transform: translateY(-2.4vh);
     }
 
     .key-label {
@@ -95,7 +96,7 @@
 
     .detected {
       position: absolute;
-      bottom: calc(max(1rem, env(safe-area-inset-bottom)) + 4.2rem);
+      bottom: calc(max(1rem, env(safe-area-inset-bottom)) + 4.8rem);
       left: 50%;
       transform: translateX(-50%);
       background: rgba(255,255,255,0.22);
@@ -109,7 +110,7 @@
 
     .controls {
       position: absolute;
-      bottom: max(1rem, env(safe-area-inset-bottom));
+      bottom: calc(max(1rem, env(safe-area-inset-bottom)) + 0.45rem);
       left: 50%;
       transform: translateX(-50%);
       display: flex;
@@ -300,7 +301,7 @@
 
     <div class="detected" id="detectedBox">Detected: —</div>
 
-    <div class="detected" id="envBox" style="bottom: calc(max(1rem, env(safe-area-inset-bottom)) + 8.3rem);">Environment: checking…</div>
+    <div class="detected" id="envBox" style="bottom: calc(max(1rem, env(safe-area-inset-bottom)) + 8.9rem);">Environment: checking…</div>
 
     <div class="controls">
       <button id="startBtn">Start</button>
